@@ -1,0 +1,40 @@
+<!-- receiver.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>iPad 映像受信</title>
+</head>
+<body>
+  <h2>iPad 映像受信</h2>
+  <video id="remoteVideo" autoplay playsinline></video>
+  <br>
+  <textarea id="offer" placeholder="Paste Offer SDP here" rows="10" cols="60"></textarea><br>
+  <button id="setOffer">Set Offer</button>
+  <br><br>
+  <textarea id="answer" placeholder="Answer SDP" rows="10" cols="60" readonly></textarea><br>
+
+  <script>
+    let pc;
+
+    document.getElementById('setOffer').onclick = async () => {
+      const offerSDP = JSON.parse(document.getElementById('offer').value);
+      pc = new RTCPeerConnection();
+
+      pc.ontrack = (event) => {
+        document.getElementById('remoteVideo').srcObject = event.streams[0];
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate === null) {
+          document.getElementById('answer').value = JSON.stringify(pc.localDescription);
+        }
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offerSDP));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+    };
+  </script>
+</body>
+</html>

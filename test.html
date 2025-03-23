@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>カメラテスト</title>
+</head>
+<body>
+  <h2>カメラテスト</h2>
+  <video autoplay playsinline id="v" width="300"></video>
+  <p id="status" style="color: red;"></p>
+
+  <script>
+    const statusEl = document.getElementById("status");
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        document.getElementById('v').srcObject = stream;
+        statusEl.textContent = "✅ カメラにアクセスできました！";
+      })
+      .catch(err => {
+        statusEl.textContent = "❌ カメラエラー: " + err.name + " - " + err.message;
+        console.error(err);
+      });
+  </script>
+</body>
+</html>

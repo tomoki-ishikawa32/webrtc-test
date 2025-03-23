@@ -1,0 +1,46 @@
+<!-- sender.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>iPhone カメラ送信</title>
+</head>
+<body>
+  <h2>iPhone カメラ映像を送信</h2>
+  <video id="localVideo" autoplay playsinline muted></video>
+  <br>
+  <textarea id="offer" placeholder="Offer SDP" rows="10" cols="60" readonly></textarea><br>
+  <button id="start">Start</button>
+  <br><br>
+  <textarea id="answer" placeholder="Paste Answer SDP here" rows="10" cols="60"></textarea><br>
+  <button id="setAnswer">Set Answer</button>
+
+  <script>
+    let localStream;
+    let pc;
+
+    document.getElementById('start').onclick = async () => {
+      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      document.getElementById('localVideo').srcObject = localStream;
+
+      pc = new RTCPeerConnection();
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate === null) {
+          document.getElementById('offer').value = JSON.stringify(pc.localDescription);
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+    };
+
+    document.getElementById('setAnswer').onclick = async () => {
+      const answerSDP = JSON.parse(document.getElementById('answer').value);
+      await pc.setRemoteDescription(new RTCSessionDescription(answerSDP));
+      alert("接続が確立されました！");
+    };
+  </script>
+</body>
+</html>
