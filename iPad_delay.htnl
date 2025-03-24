@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>iPad 映像受信（5秒遅れ）</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background-color: black;
+    }
+    #remoteVideo {
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      background: black;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 10;
+      background-color: rgba(255,255,255,0.8);
+      padding: 10px;
+      border-radius: 8px;
+    }
+    textarea {
+      width: 90vw;
+      max-width: 600px;
+    }
+  </style>
+</head>
+<body>
+  <video id="remoteVideo" autoplay playsinline controls></video>
+
+  <div id="controls">
+    <h3>iPad 映像受信（5秒遅れ）</h3>
+    <textarea id="offer" placeholder="Paste Offer SDP here" rows="8"></textarea><br>
+    <button id="setOffer">Set Offer</button>
+    <br><br>
+    <textarea id="answer" placeholder="Answer SDP" rows="8" readonly></textarea><br>
+    <button id="goFullscreen">全画面表示</button>
+  </div>
+
+  <script>
+    let pc;
+    let buffer = [];
+    let recordingStream;
+
+    document.getElementById('setOffer').onclick = async () => {
+      const offerSDP = JSON.parse(document.getElementById('offer').value);
+      pc = new RTCPeerConnection();
+
+      pc.ontrack = (event) => {
+        recordingStream = event.streams[0];
+        startBuffering(recordingStream);
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate === null) {
+          document.getElementById('answer').value = JSON.stringify(pc.localDescription);
+        }
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offerSDP));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+    };
+
+    function startBuffering(stream) {
+      const recorder = new MediaRecorder(stream, { mimeType: "video/webm; codecs=vp9" });
+      recorder.start(1000); // 1秒ごとにチャンク作成
+
+      recorder.ondataavailable = (e) => {
+        buffer.push(e.data);
+
+        if (buffer.length === 5) { // 5秒分たまったら再生開始
+          playBufferedChunks();
+        }
+      };
+    }
+
+    function playBufferedChunks() {
+      const video = document.getElementById('remoteVideo');
+
+      const blob = new Blob(buffer, { type: "video/webm" });
+      video.src = URL.createObjectURL(blob);
+      video.play();
+
+      buffer = []; // 次のバッファに備える
+    }
+
+    document.getElementById('goFullscreen').onclick = () => {
+      const video = document.getElementById('remoteVideo');
+      if (video.requestFullscreen) {
+        video.requestFullscreen();
+      } else if (video.webkitRequestFullscreen) {
+        video.webkitRequestFullscreen();
+      } else if (video.msRequestFullscreen) {
+        video.msRequestFullscreen();
+      }
+    };
+  </script>
+</body>
+</html>
