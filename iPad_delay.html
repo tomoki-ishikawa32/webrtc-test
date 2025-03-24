@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>iPad 映像受信（Canvas遅延）</title>
+  <title>iPad 映像受信（5秒遅延・Canvas）</title>
   <style>
     body, html {
       margin: 0;
@@ -38,7 +38,7 @@
 <body>
 
 <video id="remoteVideo" autoplay playsinline muted></video>
-<canvas id="delayedCanvas" width="1280" height="720"></canvas>
+<canvas id="delayedCanvas"></canvas>
 
 <div id="controls">
   <h3>iPad 映像受信（5秒遅延）</h3>
@@ -49,12 +49,13 @@
 
 <script>
   let pc;
-  let video = document.getElementById('remoteVideo');
-  let canvas = document.getElementById('delayedCanvas');
-  let ctx = canvas.getContext('2d');
-  let frameBuffer = [];
+  const video = document.getElementById('remoteVideo');
+  const canvas = document.getElementById('delayedCanvas');
+  const ctx = canvas.getContext('2d');
+  const frameBuffer = [];
+
   const DELAY_SECONDS = 5;
-  const FPS = 10;
+  const FPS = 15;
   const MAX_FRAMES = DELAY_SECONDS * FPS;
 
   document.getElementById('setOffer').onclick = async () => {
@@ -63,7 +64,13 @@
 
     pc.ontrack = (event) => {
       video.srcObject = event.streams[0];
-      startBuffering();
+
+      video.onloadedmetadata = () => {
+        // 映像サイズに合わせてCanvasサイズを設定
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        startBuffering();
+      };
     };
 
     pc.onicecandidate = (event) => {
@@ -78,20 +85,25 @@
   };
 
   function startBuffering() {
-    // フレーム保存用タイマー（リアルタイム録画）
+    // フレーム保存タイマー
     setInterval(() => {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const frame = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
       frameBuffer.push(frame);
+
       if (frameBuffer.length > MAX_FRAMES) {
-        frameBuffer.shift(); // 古いフレームを削除してバッファを維持
+        frameBuffer.shift(); // 古いフレーム削除
       }
     }, 1000 / FPS);
 
-    // 遅延描画タイマー
+    // フレーム描画タイマー（再生）
     setInterval(() => {
       if (frameBuffer.length >= MAX_FRAMES) {
-        const frame = frameBuffer.shift(); // 古いフレームから描画
+        const frame = frameBuffer.shift();
         ctx.putImageData(frame, 0, 0);
       }
     }, 1000 / FPS);
