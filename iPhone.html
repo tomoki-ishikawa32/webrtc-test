@@ -1,4 +1,3 @@
-<!-- sender.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -9,9 +8,15 @@
   <h2>iPhone カメラ映像を送信</h2>
   <video id="localVideo" autoplay playsinline muted></video>
   <br>
-  <textarea id="offer" placeholder="Offer SDP" rows="10" cols="60" readonly></textarea><br>
+  <label>カメラ選択:
+    <select id="cameraSelect">
+      <option value="user">内カメラ</option>
+      <option value="environment">外カメラ</option>
+    </select>
+  </label>
   <button id="start">Start</button>
   <br><br>
+  <textarea id="offer" placeholder="Offer SDP" rows="10" cols="60" readonly></textarea><br>
   <textarea id="answer" placeholder="Paste Answer SDP here" rows="10" cols="60"></textarea><br>
   <button id="setAnswer">Set Answer</button>
 
@@ -19,9 +24,23 @@
     let localStream;
     let pc;
 
-    document.getElementById('start').onclick = async () => {
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    async function startCamera() {
+      const facingMode = document.getElementById('cameraSelect').value;
+
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+
+      localStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode },
+        audio: false
+      });
+
       document.getElementById('localVideo').srcObject = localStream;
+    }
+
+    document.getElementById('start').onclick = async () => {
+      await startCamera();
 
       pc = new RTCPeerConnection();
       localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
