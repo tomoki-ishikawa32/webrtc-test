@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>iPhone カメラ送信</title>
+</head>
+<body>
+  <h2>iPhone カメラ映像を送信（1920×1080 / 30fps）</h2>
+  <video id="localVideo" autoplay playsinline muted style="width: 100%; max-width: 640px;"></video>
+  <br>
+  <label>カメラ選択:
+    <select id="cameraSelect">
+      <option value="user">内カメラ</option>
+      <option value="environment">外カメラ</option>
+    </select>
+  </label>
+  <button id="start">Start</button>
+  <br><br>
+  <textarea id="offer" placeholder="Offer SDP" rows="10" cols="60" readonly onclick="this.select()"></textarea><br>
+  <textarea id="answer" placeholder="Paste Answer SDP here" rows="10" cols="60"></textarea><br>
+  <button id="setAnswer">Set Answer</button>
+
+  <script>
+    let localStream;
+    let pc;
+
+    async function startCamera() {
+      const facingMode = document.getElementById('cameraSelect').value;
+
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        });
+
+        document.getElementById('localVideo').srcObject = localStream;
+
+        // 実際の設定を確認用にログ出力
+        const track = localStream.getVideoTracks()[0];
+        console.log("カメラ設定:", track.getSettings());
+
+      } catch (err) {
+        alert("カメラアクセスエラー: " + err.message);
+        console.error(err);
+      }
+    }
+
+    document.getElementById('start').onclick = async () => {
+      await startCamera();
+
+      pc = new RTCPeerConnection();
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate === null) {
+          document.getElementById('offer').value = JSON.stringify(pc.localDescription);
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+    };
+
+    document.getElementById('setAnswer').onclick = async () => {
+      const answerSDP = JSON.parse(document.getElementById('answer').value);
+      await pc.setRemoteDescription(new RTCSessionDescription(answerSDP));
+      alert("接続が確立されました！");
+      document.getElementById('start').disabled = true;
+      document.getElementById('setAnswer').disabled = true;
+    };
+  </script>
+</body>
+</html>
