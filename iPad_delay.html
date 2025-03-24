@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>iPad 映像受信（5秒遅延・Canvas）</title>
+  <title>iPad 映像受信（5秒遅延・Canvasのみ表示）</title>
   <style>
     body, html {
       margin: 0;
@@ -31,15 +31,19 @@
       max-width: 600px;
     }
     video {
-      display: none;
+      display: none; /* 完全に非表示 */
     }
   </style>
 </head>
 <body>
 
+<!-- 非表示のリアルタイム映像受信用 video -->
 <video id="remoteVideo" autoplay playsinline muted></video>
+
+<!-- 遅延表示用 canvas -->
 <canvas id="delayedCanvas"></canvas>
 
+<!-- SDP 入力UI -->
 <div id="controls">
   <h3>iPad 映像受信（5秒遅延）</h3>
   <textarea id="offer" placeholder="Paste Offer SDP here" rows="8"></textarea><br>
@@ -66,7 +70,7 @@
       video.srcObject = event.streams[0];
 
       video.onloadedmetadata = () => {
-        // 映像サイズに合わせてCanvasサイズを設定
+        // 映像サイズにCanvasを合わせる
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         startBuffering();
@@ -85,22 +89,24 @@
   };
 
   function startBuffering() {
-    // フレーム保存タイマー
+    // フレーム保存タイマー（非表示 video から画像取得）
     setInterval(() => {
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-      const tempCtx = tempCanvas.getContext('2d');
-      tempCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const frame = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
-      frameBuffer.push(frame);
+      if (video.readyState === 4) { // フレームがしっかり届いている状態のみ
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const frame = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+        frameBuffer.push(frame);
 
-      if (frameBuffer.length > MAX_FRAMES) {
-        frameBuffer.shift(); // 古いフレーム削除
+        if (frameBuffer.length > MAX_FRAMES) {
+          frameBuffer.shift(); // 古いフレームを削除
+        }
       }
     }, 1000 / FPS);
 
-    // フレーム描画タイマー（再生）
+    // フレーム描画タイマー（5秒遅れ）
     setInterval(() => {
       if (frameBuffer.length >= MAX_FRAMES) {
         const frame = frameBuffer.shift();
