@@ -2,19 +2,20 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>iPad 映像受信</title>
+  <title>iPad 映像受信（Canvas遅延）</title>
   <style>
     body, html {
       margin: 0;
       padding: 0;
-      height: 100%;
       background-color: black;
+      overflow: hidden;
+      height: 100%;
     }
-    #remoteVideo {
+    canvas {
       width: 100vw;
       height: 100vh;
-      object-fit: contain;
-      background: black;
+      display: block;
+      background-color: black;
     }
     #controls {
       position: absolute;
@@ -29,86 +30,72 @@
       width: 90vw;
       max-width: 600px;
     }
+    video {
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <video id="remoteVideo" autoplay playsinline controls></video>
 
-  <div id="controls">
-    <h3>iPad 映像受信（5秒遅延）</h3>
-    <textarea id="offer" placeholder="Paste Offer SDP here" rows="8"></textarea><br>
-    <button id="setOffer">Set Offer</button>
-    <br><br>
-    <textarea id="answer" placeholder="Answer SDP" rows="8" readonly></textarea><br>
-    <button id="goFullscreen">全画面表示</button>
-  </div>
+<video id="remoteVideo" autoplay playsinline muted></video>
+<canvas id="delayedCanvas" width="1280" height="720"></canvas>
 
-  <script>
-    let pc;
-    let buffer = [];
-    let isPlaying = false;
-    let recorder;
-    const video = document.getElementById('remoteVideo');
+<div id="controls">
+  <h3>iPad 映像受信（5秒遅延）</h3>
+  <textarea id="offer" placeholder="Paste Offer SDP here" rows="8"></textarea><br>
+  <button id="setOffer">Set Offer</button><br><br>
+  <textarea id="answer" placeholder="Answer SDP" rows="8" readonly></textarea><br>
+</div>
 
-    document.getElementById('setOffer').onclick = async () => {
-      const offerSDP = JSON.parse(document.getElementById('offer').value);
-      pc = new RTCPeerConnection();
+<script>
+  let pc;
+  let video = document.getElementById('remoteVideo');
+  let canvas = document.getElementById('delayedCanvas');
+  let ctx = canvas.getContext('2d');
+  let frameBuffer = [];
+  const DELAY_SECONDS = 5;
+  const FPS = 10;
+  const MAX_FRAMES = DELAY_SECONDS * FPS;
 
-      pc.ontrack = (event) => {
-        const stream = event.streams[0];
-        startBuffering(stream);
-      };
+  document.getElementById('setOffer').onclick = async () => {
+    const offerSDP = JSON.parse(document.getElementById('offer').value);
+    pc = new RTCPeerConnection();
 
-      pc.onicecandidate = (event) => {
-        if (event.candidate === null) {
-          document.getElementById('answer').value = JSON.stringify(pc.localDescription);
-        }
-      };
-
-      await pc.setRemoteDescription(new RTCSessionDescription(offerSDP));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+    pc.ontrack = (event) => {
+      video.srcObject = event.streams[0];
+      startBuffering();
     };
 
-    function startBuffering(stream) {
-      recorder = new MediaRecorder(stream, { mimeType: "video/webm; codecs=vp9" });
-      recorder.start(1000); // 1秒ごとに分割して保存
-
-      recorder.ondataavailable = (e) => {
-        buffer.push(e.data);
-        if (!isPlaying && buffer.length >= 5) {
-          isPlaying = true;
-          playLoop(); // 遅延再生ループ開始
-        }
-      };
-    }
-
-    async function playLoop() {
-      while (true) {
-        if (buffer.length >= 5) {
-          const chunk = buffer.splice(0, 5); // 5秒分取り出し
-          const blob = new Blob(chunk, { type: "video/webm" });
-          video.src = URL.createObjectURL(blob);
-          await video.play();
-
-          // 再生終了まで待つ
-          await new Promise(resolve => video.onended = resolve);
-        } else {
-          // バッファが足りないときは少し待つ
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-      }
-    }
-
-    document.getElementById('goFullscreen').onclick = () => {
-      if (video.requestFullscreen) {
-        video.requestFullscreen();
-      } else if (video.webkitRequestFullscreen) {
-        video.webkitRequestFullscreen();
-      } else if (video.msRequestFullscreen) {
-        video.msRequestFullscreen();
+    pc.onicecandidate = (event) => {
+      if (event.candidate === null) {
+        document.getElementById('answer').value = JSON.stringify(pc.localDescription);
       }
     };
-  </script>
+
+    await pc.setRemoteDescription(new RTCSessionDescription(offerSDP));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+  };
+
+  function startBuffering() {
+    // フレーム保存用タイマー（リアルタイム録画）
+    setInterval(() => {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      frameBuffer.push(frame);
+      if (frameBuffer.length > MAX_FRAMES) {
+        frameBuffer.shift(); // 古いフレームを削除してバッファを維持
+      }
+    }, 1000 / FPS);
+
+    // 遅延描画タイマー
+    setInterval(() => {
+      if (frameBuffer.length >= MAX_FRAMES) {
+        const frame = frameBuffer.shift(); // 古いフレームから描画
+        ctx.putImageData(frame, 0, 0);
+      }
+    }, 1000 / FPS);
+  }
+</script>
 </body>
 </html>
