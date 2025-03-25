@@ -25,13 +25,14 @@
       background-color: rgba(255,255,255,0.8);
       padding: 10px;
       border-radius: 8px;
+      transition: opacity 0.3s ease;
     }
     textarea {
       width: 90vw;
       max-width: 600px;
     }
     video {
-      display: none; /* 完全に非表示 */
+      display: none;
     }
   </style>
 </head>
@@ -43,7 +44,7 @@
 <!-- 遅延表示用 canvas -->
 <canvas id="delayedCanvas"></canvas>
 
-<!-- SDP 入力UI -->
+<!-- SDP 入力UI（接続後に非表示にする） -->
 <div id="controls">
   <h3>iPad 映像受信（5秒遅延）</h3>
   <textarea id="offer" placeholder="Paste Offer SDP here" rows="8"></textarea><br>
@@ -74,6 +75,8 @@
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         startBuffering();
+        // 接続完了後にコントロールを非表示にする
+        document.getElementById('controls').style.display = 'none';
       };
     };
 
@@ -89,9 +92,9 @@
   };
 
   function startBuffering() {
-    // フレーム保存タイマー（非表示 video から画像取得）
+    // フレーム保存タイマー
     setInterval(() => {
-      if (video.readyState === 4) { // フレームがしっかり届いている状態のみ
+      if (video.readyState === 4) {
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvas.width;
         tempCanvas.height = canvas.height;
@@ -99,14 +102,13 @@
         tempCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const frame = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
         frameBuffer.push(frame);
-
         if (frameBuffer.length > MAX_FRAMES) {
-          frameBuffer.shift(); // 古いフレームを削除
+          frameBuffer.shift();
         }
       }
     }, 1000 / FPS);
 
-    // フレーム描画タイマー（5秒遅れ）
+    // フレーム描画タイマー
     setInterval(() => {
       if (frameBuffer.length >= MAX_FRAMES) {
         const frame = frameBuffer.shift();
