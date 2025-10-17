@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>スイングリプレイビューア</title>
+  <style>
+    body, html { margin: 0; padding: 0; background: black; overflow: hidden; height: 100%; }
+    canvas { width: 100vw; height: 100vh; display: block; background: black; }
+    #controls {
+      position: absolute; top: 10px; left: 10px; z-index: 10;
+      background: rgba(255,255,255,0.85); padding: 10px; border-radius: 8px;
+    }
+    button { margin-right: 5px; }
+    video { display: none; }
+  </style>
+</head>
+<body>
+  <video id="remoteVideo" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+  <div id="controls">
+    <h3>スイングリプレイビューア</h3>
+    <textarea id="offer" rows="6" placeholder="Paste Offer SDP here"></textarea><br>
+    <button id="setOffer">Set Offer</button>
+    <textarea id="answer" rows="6" placeholder="Answer SDP" readonly></textarea><br>
+    <button id="replay">▶️ リプレイ</button>
+  </div>
+
+  <script>
+    let pc;
+    const video = document.getElementById('remoteVideo');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const frameBuffer = [];
+    const FPS = 30;
+    const MAX_FRAMES = 5 * FPS; // 直近5秒間を保存
+    let replayMode = false;
+
+    document.getElementById('setOffer').onclick = async () => {
+      const offerSDP = JSON.parse(document.getElementById('offer').value);
+      pc = new RTCPeerConnection();
+
+      pc.ontrack = (event) => {
+        video.srcObject = event.streams[0];
+        video.onloadedmetadata = () => {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          startBuffering();
+        };
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate === null) {
+          document.getElementById('answer').value = JSON.stringify(pc.localDescription);
+        }
+      };
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offerSDP));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+    };
+
+    // フレームを常時保存
+    function startBuffering() {
+      setInterval(() => {
+        if (video.readyState === 4 && !replayMode) {
+          const tmp = document.createElement('canvas');
+          tmp.width = canvas.width;
+          tmp.height = canvas.height;
+          const tctx = tmp.getContext('2d');
+          tctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const frame = tctx.getImageData(0, 0, canvas.width, canvas.height);
+          frameBuffer.push(frame);
+          if (frameBuffer.length > MAX_FRAMES) frameBuffer.shift();
+        }
+      }, 1000 / FPS);
+    }
+
+    // 手動リプレイ
+    document.getElementById('replay').onclick = () => {
+      if (frameBuffer.length === 0) return;
+      replayMode = true;
+      const replayFrames = [...frameBuffer];
+      let idx = 0;
+
+      const loop = setInterval(() => {
+        if (!replayMode) { clearInterval(loop); return; }
+        ctx.putImageData(replayFrames[idx], 0, 0);
+        idx = (idx + 1) % replayFrames.length;
+      }, 1000 / FPS);
+    };
+
+    // 新しいスイングが始まったら再びライブ映像に戻す（任意）
+    window.addEventListener('click', () => { replayMode = false; });
+  </script>
+</body>
+</html>
